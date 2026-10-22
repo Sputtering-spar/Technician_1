@@ -47,6 +47,7 @@ tailwind.config={theme:{extend:{fontFamily:{sans:['Prompt','sans-serif']},colors
       <input id="a-pw" type="password" class="inp" placeholder="รหัสผ่านผู้ดูแล" autocomplete="off">
       <p class="text-slate-500 pt-1">1) สร้างบรรทัดรหัสผ่านสำหรับรายชื่อ (ใส่ ADMIN เพื่อสร้างแฮชรหัสผู้ดูแลใหม่)</p>
       <input id="h-id" class="inp" placeholder="รหัสพนักงาน เช่น EMP004" autocapitalize="characters">
+      <input id="h-name" class="inp" placeholder="ชื่อ นามสกุล">
       <input id="h-pw" class="inp" placeholder="รหัสผ่านที่ต้องการตั้ง">
       <button type="button" id="h-go" class="w-full bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg">สร้างบรรทัด</button>
       <textarea id="h-out" readonly rows="3" class="inp text-xs" placeholder="ผลลัพธ์จะแสดงที่นี่ คัดลอกไปวางใน EMPLOYEES"></textarea>
@@ -181,10 +182,10 @@ tailwind.config={theme:{extend:{fontFamily:{sans:['Prompt','sans-serif']},colors
 const DEPARTMENTS = ['หักแท่ง'];
 // รายชื่อพนักงานที่เข้าระบบได้ พร้อมแผนกประจำตัว (dept) และแฮชของรหัสผ่าน (ไม่เก็บรหัสผ่านจริงในไฟล์)
 // ถ้าไม่ใส่ dept ระบบจะใช้แผนกแรกใน DEPARTMENTS
-// สร้างบรรทัดใหม่ได้โดยเปิดไฟล์ด้วยลิงก์ต่อท้าย #admin (แล้วเพิ่ม dept เองในบรรทัดที่ได้)
+// สร้างบรรทัดใหม่ได้โดยเปิดไฟล์ด้วยลิงก์ต่อท้าย #admin (กรอกชื่อได้ในกล่องผู้ดูแลเลย)
 const EMPLOYEES = {
   '8828': { name: 'นนธวัฒน์ รัตนพงษ์', dept: 'หักแท่ง', hash: '019da01370f605a62fbe9236c579b1bb2d567ae8f0265717000b74c87f434f79' },
-  '8861': { name: 'พัฒนบดินทร์ สิทธิบูรณ์', dept: 'หักแท่ง', hash: '15a89e089c4e539c42c9f9a473c8a5f7205197be20a01a1dc9f2354db0d99a24' },,
+  '8861': { name: 'พัฒนบดินทร์ สิทธิบูรณ์', dept: 'หักแท่ง', hash: '15a89e089c4e539c42c9f9a473c8a5f7205197be20a01a1dc9f2354db0d99a24' },
   'EMP003': { name: 'ประเสริฐ มั่นคง', dept: 'หักแท่ง', hash: '1d6fb0344849c17ee2b043e94f7125d1865b9d379c8ad40d1a3f47781a1d329f' }
 };
 const CAUSES = ['ลูกกลิ้งบดแตก','ลูกปืนแตก','ดูดแตก','งานมุดสายพาน','เศษชิ้นงานฝังสายพาน','เซนเซอร์ไม่จับ','อื่นๆ'];
@@ -254,8 +255,11 @@ $('emp-pw').addEventListener('input',()=>$('login-err').textContent='');
 $('pw-toggle').onclick=()=>{ const t=$('emp-pw').type==='password'; $('emp-pw').type=t?'text':'password'; $('pw-toggle').textContent=t?'ซ่อน':'แสดง' };
 const showTool=()=>$('admin-tool').classList.toggle('hidden',location.hash!=='#admin');
 showTool(); window.addEventListener('hashchange',showTool);
-$('h-go').onclick=()=>{ if(!adminOk()) return; const id=$('h-id').value.trim().toUpperCase(), pw=$('h-pw').value; if(!id||!pw) return;
-  $('h-out').value=`'${id}': { name: 'ชื่อ นามสกุล', dept: '${DEPARTMENTS[0]}', hash: '${hashPw(id,pw)}' },` };
+$('h-go').onclick=()=>{ if(!adminOk()) return;
+  const id=$('h-id').value.trim().toUpperCase(), pw=$('h-pw').value;
+  const name=$('h-name').value.trim().replace(/\\/g,'\\\\').replace(/'/g,"\\'") || 'ชื่อ นามสกุล';
+  if(!id||!pw) return;
+  $('h-out').value=`'${id}': { name: '${name}', dept: '${DEPARTMENTS[0]}', hash: '${hashPw(id,pw)}' },` };
 $('login-form').addEventListener('submit', e=>{
   e.preventDefault();
   const id=$('emp-id').value.trim().toUpperCase(), emp=EMPLOYEES[id], pw=$('emp-pw').value;

@@ -85,7 +85,7 @@ tailwind.config={theme:{extend:{fontFamily:{sans:['Prompt','sans-serif']},colors
           <div class="grid md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
             <div><label for="dept" class="lbl">แผนก</label><select id="dept" class="inp"></select><p class="err" id="e-dept"></p></div>
             <div><label for="shift" class="lbl">กะ</label><select id="shift" class="inp"><option value="">-- เลือกกะ --</option><option>A</option><option>B</option></select><p class="err" id="e-shift"></p></div>
-            <div><label for="machine-id" class="lbl">รหัสเครื่องจักร</label><input id="machine-id" class="inp uppercase" placeholder="เช่น P001"><div id="chips" class="flex gap-2 flex-wrap mt-2"></div><p class="err" id="e-machine"></p></div>
+            <div><label for="machine-id" class="lbl">รหัสเครื่องจักร</label><div class="flex"><span id="machine-prefix" class="inline-flex items-center px-4 bg-slate-200 text-slate-700 border border-r-0 border-slate-300 rounded-l-lg font-bold text-lg"></span><input id="machine-id" class="inp !rounded-l-none" inputmode="numeric" maxlength="3" placeholder="เลข 3 หลัก เช่น 019" autocomplete="off"></div><div id="chips" class="flex gap-2 flex-wrap mt-2"></div><p class="err" id="e-machine"></p></div>
             <div><label for="category" class="lbl">อาการเสีย / ปัญหางาน NG </label><select id="category" class="inp"></select><p class="err" id="e-category"></p></div>
             
           </div>
@@ -101,7 +101,7 @@ tailwind.config={theme:{extend:{fontFamily:{sans:['Prompt','sans-serif']},colors
             <div>
               <span class="lbl">เวลาซ่อมเสร็จ</span>
               <div class="grid grid-cols-[1fr_1fr] gap-2">
-                <input id="f-date" class="inp" placeholder="วว/ดด/ปปปป" maxlength="10" aria-label="วันที่ซ่อมเสร็จ">
+                <input id="f-date" class="inp" inputmode="numeric" placeholder="วว/ดด/ปปปป" maxlength="10" aria-label="วันที่ซ่อมเสร็จ">
                 <div class="flex items-center gap-1" role="group" aria-label="เวลาซ่อมเสร็จ"><select id="f-h" class="inp !px-2" aria-label="ชั่วโมง"></select><span class="font-bold">:</span><select id="f-m" class="inp !px-2" aria-label="นาที"></select><input id="f-time" class="hidden"></div>
               </div>
               <p class="err" id="e-finish"></p>
@@ -217,6 +217,9 @@ function sha256(msg){
 /*END*/
 const hashPw=(id,pw)=>sha256('repairlog:'+id+':'+pw);
 const FORCE_CHANGE_FIRST_LOGIN = false;  // บังคับตั้งรหัสผ่านใหม่เมื่อยังใช้รหัสเริ่มต้น (นับแยกตามเครื่อง)
+const IDLE_MIN = 1;                    // ไม่มีการใช้งาน (แตะ/พิมพ์/เลื่อนหน้า) นานกี่นาทีถึงให้ออกจากระบบ ระหว่างกรอกฟอร์มอยู่จะไม่หมดเวลา
+const MACHINE_PREFIX = 'P';       // ตัวอักษรหน้ารหัสเครื่องจักรของแผนกนี้ (ล็อกไว้ ช่างกรอกเฉพาะตัวเลข)
+const MACHINE_DIGITS = 3;               // จำนวนหลักของตัวเลข (เช่น 019)
 const MAX_TRIES = 5, LOCK_MIN = 5;      // ใส่ผิดครบกี่ครั้งถึงล็อก / ล็อกกี่นาที
 const ADMIN_CONTACT = 'หัวหน้าทีม';      // ชื่อ/เบอร์ที่แสดงให้พนักงานที่ลืมรหัสผ่านติดต่อ
 // แฮชรหัสผ่านผู้ดูแล (ตัวอย่างคือ admin1234 เปลี่ยนก่อนใช้จริง) สร้างใหม่ได้โดยใส่รหัสพนักงานเป็น ADMIN ในกล่องผู้ดูแล
@@ -238,6 +241,8 @@ let user = LS.get('user', null), shiftTouched = false, stamp = null;
 // แผนกล็อกตามพนักงานที่ล็อกอิน เลือกเองไม่ได้
 const deptOf = id => (EMPLOYEES[id] && EMPLOYEES[id].dept) || DEPARTMENTS[0];
 $('dept').disabled = true;
+$('machine-prefix').textContent = MACHINE_PREFIX;
+$('machine-id').addEventListener('input',e=>{ e.target.value=e.target.value.replace(/\D/g,'').slice(0,MACHINE_DIGITS) });
 $('category').innerHTML = '<option value="">-- เลือกสาเหตุ --</option>' + CAUSES.map(c=>`<option>${c}</option>`).join('');
 
 /* ===== ล็อกอิน (จำไว้ในเครื่อง) ===== */
@@ -278,7 +283,7 @@ $('login-form').addEventListener('submit', e=>{
     $('emp-pw').value=''; $('emp-pw').focus(); return }
   LS.del('lock_'+id);
   const name=emp.name; $('emp-pw').value='';
-  user={id,name}; LS.set('user',user); stamp=Date.now(); LS.set('session',{id,name,at:stamp}); enter();
+  user={id,name}; LS.set('user',user); stamp=Date.now(); LS.set('session',{id,name,at:stamp,act:stamp}); enter();
 });
 function toLogin(){
   LS.del('session'); stamp=null;
@@ -321,12 +326,13 @@ function calc(showErr){
   $('e-start').textContent = ''; $('e-finish').textContent = '';
   if(s&&f){
     const diff=Math.round((f-s)/60000);
-    if(diff<0) $('e-start').textContent='เวลาเริ่มซ่อมต้องก่อนเวลาซ่อมเสร็จ';
+    if(diff<0) $('e-start').textContent=`เวลาเริ่มซ่อมต้องก่อนเวลาซ่อมเสร็จ (${fmtDate(f)} ${fmtTime(f)}) ถ้าซ่อมเสร็จไปนานแล้ว ให้กดออกจากระบบแล้วเข้าสู่ระบบใหม่`;
+    else if(f-Date.now()>60000) $('e-finish').textContent='เวลาซ่อมเสร็จต้องไม่เกินเวลาปัจจุบัน';
     else mins=diff;
   }
   if(showErr){
     if(!s) $('e-start').textContent='กรอกวันที่ (เช่น 20/10/2026) และเลือกเวลาทั้งชั่วโมงและนาที';
-    if(!f) $('e-finish').textContent='กดปุ่ม "ซ่อมเสร็จ" เพื่อบันทึกเวลาซ่อมเสร็จ';
+    if(!f) $('e-finish').textContent='อ่านเวลาซ่อมเสร็จไม่ได้ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่';
   }
   $('downtime').value = mins ?? '';
   $('dt-hint').textContent = mins>=60 ? `= ${Math.floor(mins/60)} ชม. ${mins%60} นาที` : '';
@@ -347,9 +353,9 @@ function resetForm(){
 /* ===== บันทึก + ส่งเข้า Google Sheets ===== */
 $('repair-form').addEventListener('submit', e=>{
   e.preventDefault();
-  const machine=$('machine-id').value.trim().toUpperCase(), cause=$('category').value, details=$('details').value.trim();
+  const mDigits=$('machine-id').value.replace(/\D/g,''), machine=mDigits?MACHINE_PREFIX+mDigits.padStart(MACHINE_DIGITS,'0'):'', cause=$('category').value, details=$('details').value.trim();
   const {s,f,mins}=calc(true);
-  $('e-machine').textContent = machine?'':'กรอกรหัสเครื่องจักร';
+  $('e-machine').textContent = machine?'':'กรอกเลขเครื่องจักร';
   $('e-category').textContent = cause?'':'เลือกสาเหตุ';
   $('e-shift').textContent = $('shift').value?'':'เลือกกะ';
   $('e-dept').textContent = $('dept').value?'':'เลือกแผนก';
@@ -418,7 +424,7 @@ $('list').addEventListener('click',e=>{
   const id=e.target.dataset.del; if(!id||!confirm('ลบรายการนี้ออกจากเครื่อง? (ข้อมูลที่ส่งขึ้นชีตแล้วจะไม่ถูกลบ)')) return;
   LS.set('records',LS.get('records',[]).filter(r=>String(r.id)!==id)); renderList();
 });
-$('chips').addEventListener('click',e=>{ if(e.target.dataset.m){ $('machine-id').value=e.target.dataset.m; $('category').focus() } });
+$('chips').addEventListener('click',e=>{ if(e.target.dataset.m){ $('machine-id').value=e.target.dataset.m.replace(/\D/g,'').slice(0,MACHINE_DIGITS); $('category').focus() } });
 
 const showAdmin=()=>$('export').classList.toggle('hidden',location.hash!=='#admin');
 showAdmin(); window.addEventListener('hashchange',showAdmin);
@@ -487,9 +493,32 @@ $('r-go').onclick=()=>{
 };
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('modal').classList.contains('hidden')) $('modal-ok').click() });
 
+const EXPIRED_MSG='ไม่มีการใช้งานนานเกินกำหนด กรุณาเข้าสู่ระบบใหม่หลังซ่อมเสร็จ';
+let lastAct=Date.now(), lastSave=0;
+// นับว่า "ยังใช้งานอยู่" เมื่อมีการแตะ พิมพ์ เลือก หรือเลื่อนหน้า (บันทึกลงเครื่องไว้ด้วย เผื่อปิดเบราว์เซอร์แล้วเปิดใหม่)
+function touch(){
+  lastAct=Date.now();
+  if(user&&stamp&&lastAct-lastSave>5000){
+    lastSave=lastAct;
+    if(LS.get('session',null)) LS.set('session',{id:user.id,name:user.name,at:stamp,act:lastAct});
+  }
+}
+['pointerdown','keydown','input','change','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,touch,{capture:true,passive:true}));
 const ses=LS.get('session',null);
-if(ses&&ses.at&&EMPLOYEES[ses.id]){ user={id:ses.id,name:EMPLOYEES[ses.id].name}; stamp=ses.at; enter() }
-else if(user&&EMPLOYEES[user.id]){ $('emp-id').value=user.id; showWho() }
+if(ses&&ses.at&&EMPLOYEES[ses.id]&&Date.now()-(ses.act||ses.at)<IDLE_MIN*60000){ user={id:ses.id,name:EMPLOYEES[ses.id].name}; stamp=ses.at; lastAct=ses.act||ses.at; enter() }
+else {
+  if(ses) LS.del('session');
+  if(user&&EMPLOYEES[user.id]){ $('emp-id').value=user.id; showWho() }
+  if(ses) $('login-err').textContent=EXPIRED_MSG;
+}
+// ไม่มีการใช้งานจนครบเวลา (หรือสลับกลับมาที่แอปหลังทิ้งไว้นาน) ให้เด้งกลับหน้าล็อกอินเอง
+function checkExpire(){
+  if(stamp&&!$('main-view').classList.contains('hidden')&&Date.now()-lastAct>=IDLE_MIN*60000){
+    toLogin(); $('login-err').textContent=EXPIRED_MSG;
+  }
+}
+setInterval(checkExpire,15000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) checkExpire() });
 syncPending().then(()=>{ if(!$('main-view').classList.contains('hidden')) renderList() });
 </script>
 </body>
